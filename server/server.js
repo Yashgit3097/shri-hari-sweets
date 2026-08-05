@@ -1,5 +1,6 @@
 import express from 'express';
 import http from 'http';
+import https from 'https';
 import { Server } from 'socket.io';
 import cors from 'cors';
 import dotenv from 'dotenv';
@@ -30,6 +31,27 @@ app.set('io', io);
 
 // Mount API Routes
 app.use('/api/orders', orderRoutes);
+
+// Health Check Endpoint
+app.get('/health', (req, res) => {
+  res.status(200).json({ status: 'UP', timestamp: new Date() });
+});
+
+// Self-ping to prevent Render sleeping (every 5 minutes)
+const pingInterval = 5 * 60 * 1000;
+const selfUrl = `https://shri-hari-sweets.onrender.com`;
+
+if (selfUrl) {
+  setInterval(() => {
+    const client = selfUrl.startsWith('https') ? https : http;
+    client.get(`${selfUrl}/health`, (res) => {
+      console.log(`Self-ping response: ${res.statusCode}`);
+    }).on('error', (err) => {
+      console.error(`Self-ping failed: ${err.message}`);
+    });
+  }, pingInterval);
+  console.log(`Self-ping scheduled for ${selfUrl} every 5 minutes.`);
+}
 
 // Socket Connections
 io.on('connection', async (socket) => {

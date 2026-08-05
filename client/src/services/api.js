@@ -1,4 +1,4 @@
-const API_BASE = 'http://localhost:5000/api/orders';
+const API_BASE = 'https://shri-hari-sweets.onrender.com/api/orders';
 
 export const fetchOrders = async () => {
   const res = await fetch(API_BASE);
