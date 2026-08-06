@@ -6,6 +6,7 @@ import BottomNav from './views/BottomNav';
 import OverviewPage from './views/OverviewPage';
 import DataPage from './views/DataPage';
 import CustomerModal from './views/CustomerModal';
+import InstallButton from './views/InstallButton';
 import Toast from './views/Toast';
 import ErrorState from './views/ui/ErrorState';
 import { WifiOff } from 'lucide-react';
@@ -34,6 +35,7 @@ function AppContent() {
 
       <BottomNav />
       <CustomerModal />
+      <InstallButton />
     </div>
   );
 }
