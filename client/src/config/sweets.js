@@ -20,8 +20,7 @@ export const SWEET_NAMES = Object.keys(SWEETS_PRICES);
 
 export const WEIGHT_OPTIONS = [
   { value: 250, label: "250 gram" },
-  { value: 500, label: "500 gram" },
-  { value: 1000, label: "1 kg" }
+  { value: 500, label: "500 gram" }
 ];
 
 export const getPredefinedPrice = (itemName, weight) => {
