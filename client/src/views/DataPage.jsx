@@ -339,7 +339,7 @@ function OrderCard({ order, pending, onToggle, onEdit, onDelete }) {
             >
               <div className="min-w-0">
                 <p className="truncate text-[13px] font-medium text-ink-800">
-                  {item.itemName}
+                  {idx + 1}. {item.itemName}
                 </p>
                 <p className="mt-0.5 text-[11px] font-medium text-ink-400 tabular-nums">
                   {weightLabel(item.weight)} × {item.qty}

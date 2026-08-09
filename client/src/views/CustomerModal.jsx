@@ -19,6 +19,12 @@ const newRow = (itemName = SWEET_NAMES[0], weight = 250, qty = 1) => {
   return { key: `row-${++rowSeq}`, itemName, weight, qty, price, amount: price * qty };
 };
 
+const getOrdinal = (n) => {
+  const s = ["th", "st", "nd", "rd"],
+    v = n % 100;
+  return n + (s[(v - 20) % 10] || s[v] || s[0]);
+};
+
 const inr = (n) => `₹${Number(n || 0).toLocaleString('en-IN')}`;
 
 /**
@@ -45,13 +51,13 @@ function OrderForm({ order }) {
   const [items, setItems] = useState(() =>
     order?.items?.length
       ? order.items.map((item) => ({
-          key: `row-${++rowSeq}`,
-          itemName: item.itemName,
-          weight: item.weight,
-          qty: item.qty,
-          price: item.price,
-          amount: item.amount,
-        }))
+        key: `row-${++rowSeq}`,
+        itemName: item.itemName,
+        weight: item.weight,
+        qty: item.qty,
+        price: item.price,
+        amount: item.amount,
+      }))
       : [newRow()]
   );
   const [status, setStatus] = useState(order?.status || 'unpaid');
@@ -340,22 +346,20 @@ function OrderForm({ order }) {
                     type="button"
                     onClick={() => setStatus(opt.id)}
                     aria-pressed={active}
-                    className={`tap flex items-center justify-center gap-2 rounded-xl border px-4 py-3 text-[13px] font-semibold active:scale-[0.98] ${
-                      active
-                        ? isPaid
-                          ? 'border-sage-500 bg-sage-50 text-sage-600'
-                          : 'border-wine-700 bg-blush-50 text-wine-700'
-                        : 'border-blush-100 bg-cream-50 text-ink-400 hover:border-blush-200'
-                    }`}
+                    className={`tap flex items-center justify-center gap-2 rounded-xl border px-4 py-3 text-[13px] font-semibold active:scale-[0.98] ${active
+                      ? isPaid
+                        ? 'border-sage-500 bg-sage-50 text-sage-600'
+                        : 'border-wine-700 bg-blush-50 text-wine-700'
+                      : 'border-blush-100 bg-cream-50 text-ink-400 hover:border-blush-200'
+                      }`}
                   >
                     <span
-                      className={`flex size-4 items-center justify-center rounded-full border transition-colors duration-200 ${
-                        active
-                          ? isPaid
-                            ? 'border-sage-500 bg-sage-500 text-cream-50'
-                            : 'border-wine-700 bg-wine-700 text-cream-50'
-                          : 'border-blush-200'
-                      }`}
+                      className={`flex size-4 items-center justify-center rounded-full border transition-colors duration-200 ${active
+                        ? isPaid
+                          ? 'border-sage-500 bg-sage-500 text-cream-50'
+                          : 'border-wine-700 bg-wine-700 text-cream-50'
+                        : 'border-blush-200'
+                        }`}
                     >
                       {active && <Check className="size-2.5" strokeWidth={4} />}
                     </span>
@@ -410,10 +414,9 @@ function OrderForm({ order }) {
 /* ───────────────── form pieces ───────────────── */
 
 const inputClass = (hasError) =>
-  `tap w-full rounded-xl border bg-cream-50 px-3.5 py-3 text-[14px] font-medium text-ink-900 outline-none placeholder:text-ink-300 focus:ring-4 ${
-    hasError
-      ? 'border-clay-500/60 focus:border-clay-500 focus:ring-clay-500/10'
-      : 'border-blush-100 focus:border-wine-600/40 focus:ring-wine-700/8'
+  `tap w-full rounded-xl border bg-cream-50 px-3.5 py-3 text-[14px] font-medium text-ink-900 outline-none placeholder:text-ink-300 focus:ring-4 ${hasError
+    ? 'border-clay-500/60 focus:border-clay-500 focus:ring-clay-500/10'
+    : 'border-blush-100 focus:border-wine-600/40 focus:ring-wine-700/8'
   }`;
 
 function Fieldset({ title, action, children }) {
@@ -451,34 +454,38 @@ function Field({ label, hint, error, required, children }) {
 }
 
 function ItemRow({ item, index, canRemove, onChange, onRemove }) {
+  const ordinal = index + 1;
   return (
     <div className="anim-fade-up rounded-xl border border-blush-100 bg-cream-50 p-3.5">
-      <div className="flex items-start gap-2.5">
-        <div className="grid flex-1 grid-cols-2 gap-2.5">
-          <SelectField
-            label="Sweet"
-            value={item.itemName}
-            onChange={(v) => onChange(index, 'itemName', v)}
-            options={SWEET_NAMES.map((n) => ({ value: n, label: n }))}
-          />
-          <SelectField
-            label="Pack"
-            value={item.weight}
-            onChange={(v) => onChange(index, 'weight', v)}
-            options={WEIGHT_OPTIONS.map((o) => ({ value: o.value, label: o.label }))}
-          />
-        </div>
-
+      <div className="mb-2.5 flex items-center justify-between">
+        <span className="flex size-5 items-center justify-center rounded-full bg-wine-700 text-[10px] font-bold text-cream-50 ring-1 ring-wine-800/10">
+          {ordinal}
+        </span>
         {canRemove && (
           <button
             type="button"
             onClick={onRemove}
             aria-label="Remove sweet"
-            className="tap mt-[22px] flex size-9 shrink-0 items-center justify-center rounded-lg text-ink-300 hover:bg-clay-50 hover:text-clay-600 active:scale-90"
+            className="tap flex size-6 items-center justify-center rounded-lg text-ink-300 hover:bg-clay-50 hover:text-clay-600 active:scale-90"
           >
-            <Trash2 className="size-4" strokeWidth={2} />
+            <Trash2 className="size-3.5" strokeWidth={2} />
           </button>
         )}
+      </div>
+
+      <div className="grid grid-cols-2 gap-2.5">
+        <SelectField
+          label="Sweet"
+          value={item.itemName}
+          onChange={(v) => onChange(index, 'itemName', v)}
+          options={SWEET_NAMES.map((n) => ({ value: n, label: n }))}
+        />
+        <SelectField
+          label="Pack"
+          value={item.weight}
+          onChange={(v) => onChange(index, 'weight', v)}
+          options={WEIGHT_OPTIONS.map((o) => ({ value: o.value, label: o.label }))}
+        />
       </div>
 
       <div className="mt-3 flex items-center justify-between gap-3 border-t border-blush-100 pt-3">

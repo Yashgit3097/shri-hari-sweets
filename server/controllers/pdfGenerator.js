@@ -59,9 +59,9 @@ export const generateOrdersPDF = (orders, res) => {
   // Helper: Format Order Items as list with subtotals
   const formatOrderItems = (items) => {
     return (items || [])
-      .map((item) => {
+      .map((item, idx) => {
         const wt = item.weight >= 1000 ? `${item.weight / 1000}kg` : `${item.weight}g`;
-        return `• ${item.itemName} (${wt}) x ${item.qty}   —   ${formatINR(item.amount)}`;
+        return `${idx + 1}. ${item.itemName} (${wt}) x ${item.qty}   —   ${formatINR(item.amount)}`;
       })
       .join('\n');
   };
