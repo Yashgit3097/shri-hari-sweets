@@ -17,6 +17,7 @@ import {
   Trash2,
   X,
   FileDown,
+  Copy,
 } from 'lucide-react';
 
 const FILTERS = [
@@ -282,6 +283,52 @@ function OrderCard({ order, pending, onToggle, onEdit, onDelete }) {
   const paid = order.status === 'paid';
   const deleting = pending === 'delete';
   const toggling = pending === 'toggle';
+  const { showToast } = useOrderController();
+
+  const generateMessageText = () => {
+    const itemsList = (order.items || [])
+      .map((item, idx) => {
+        return `${idx + 1}. *${item.itemName}* (${weightLabel(item.weight)} × ${item.qty}) — *₹${Number(item.amount || 0).toLocaleString('en-IN')}*`;
+      })
+      .join('\n');
+
+    const lines = [
+      `✨ SHRI HARI SWEETS ✨`,
+      `------------------------------------------`,
+      `*Name:* _${order.customerName}_`,
+      order.phoneNumber ? `*Phone:* _${order.phoneNumber}_` : null,
+      ``,
+      itemsList,
+      ``,
+      `*Total:* *₹${Number(order.totalPrice || 0).toLocaleString('en-IN')}*`,
+      `------------------------------------------`,
+      `🙏 Thank you for your order!`
+    ];
+
+    return lines.filter((l) => l !== null).join('\n');
+  };
+
+  const handleCopy = async () => {
+    try {
+      const text = generateMessageText();
+      await navigator.clipboard.writeText(text);
+      showToast('Order details copied to clipboard!', 'success');
+    } catch (err) {
+      showToast('Failed to copy order details.', 'error');
+    }
+  };
+
+  const handleWhatsApp = () => {
+    try {
+      const text = generateMessageText();
+      const cleanPhone = order.phoneNumber.replace(/\D/g, '');
+      const formattedPhone = cleanPhone.length === 10 ? `91${cleanPhone}` : cleanPhone;
+      const url = `https://wa.me/${formattedPhone}?text=${encodeURIComponent(text)}`;
+      window.open(url, '_blank');
+    } catch (err) {
+      showToast('Failed to open WhatsApp.', 'error');
+    }
+  };
 
   return (
     <article
@@ -365,6 +412,15 @@ function OrderCard({ order, pending, onToggle, onEdit, onDelete }) {
         </div>
 
         <div className="flex shrink-0 items-center gap-1">
+          {order.phoneNumber && (
+            <IconButton
+              label="Send to WhatsApp"
+              onClick={handleWhatsApp}
+              icon={WhatsAppIcon}
+              variant="whatsapp"
+            />
+          )}
+          <IconButton label="Copy details" onClick={handleCopy} icon={Copy} />
           <IconButton label="Edit order" onClick={onEdit} icon={Pencil} />
           <IconButton label="Delete order" onClick={onDelete} icon={Trash2} danger />
         </div>
@@ -403,19 +459,39 @@ function StatusToggle({ paid, pending, onClick }) {
   );
 }
 
-function IconButton({ label, icon: Icon, onClick, danger = false }) {
+function IconButton({ label, icon: Icon, onClick, danger = false, variant = 'default' }) {
+  let hoverClasses = 'hover:bg-blush-50 hover:text-wine-700';
+  const effectiveVariant = danger ? 'danger' : variant;
+  
+  if (effectiveVariant === 'danger') {
+    hoverClasses = 'hover:bg-clay-50 hover:text-clay-600';
+  } else if (effectiveVariant === 'whatsapp') {
+    hoverClasses = 'hover:bg-emerald-50 hover:text-emerald-600';
+  }
+
   return (
     <button
       type="button"
       onClick={onClick}
       title={label}
       aria-label={label}
-      className={`tap flex size-9 items-center justify-center rounded-lg text-ink-400 active:scale-90 ${
-        danger ? 'hover:bg-clay-50 hover:text-clay-600' : 'hover:bg-blush-50 hover:text-wine-700'
-      }`}
+      className={`tap flex size-9 items-center justify-center rounded-lg text-ink-400 active:scale-90 ${hoverClasses}`}
     >
       <Icon className="size-4" strokeWidth={2} />
     </button>
+  );
+}
+
+function WhatsAppIcon({ className }) {
+  return (
+    <svg
+      xmlns="http://www.w3.org/2000/svg"
+      viewBox="0 0 24 24"
+      fill="currentColor"
+      className={className}
+    >
+      <path d="M12.012 2c-5.506 0-9.989 4.478-9.99 9.984a9.96 9.96 0 0 0 1.333 4.99L2 22l5.135-1.347a9.957 9.957 0 0 0 4.877 1.279h.005c5.505 0 9.988-4.478 9.99-9.984A9.99 9.99 0 0 0 12.012 2zm4.7 13.061c-.26.734-1.28 1.31-1.77 1.39-.43.08-.99.13-2.88-.61-2.42-.94-3.95-3.36-4.07-3.52-.12-.16-.97-1.29-.97-2.46 0-1.17.61-1.74.83-1.97.22-.23.48-.29.64-.29.16 0 .32.01.46.01.15 0 .36-.06.56.41.2.49.69 1.68.75 1.8.06.12.1.26.02.42-.08.16-.16.26-.26.38-.1.12-.22.27-.31.37-.11.1-.22.22-.09.43.13.22.58.96 1.25 1.56.86.76 1.58 1 1.8 1.1.22.1.35.08.48-.06.13-.15.56-.65.71-.87.15-.22.3-.18.51-.1.21.08 1.34.63 1.57.75.23.12.38.18.44.28.06.1.06.58-.2 1.31z" />
+    </svg>
   );
 }
 
