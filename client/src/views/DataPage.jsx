@@ -132,23 +132,25 @@ export default function DataPage() {
             <button
               type="button"
               onClick={() => setUpiModalOpen(true)}
-              className="tap inline-flex shrink-0 items-center gap-2 rounded-full border border-blush-200 bg-cream-50 px-4 py-2.5 text-[13px] font-semibold text-wine-700 hover:bg-blush-50 active:scale-[0.97]"
+              title="UPI Settings"
+              className="tap inline-flex shrink-0 items-center justify-center gap-2 rounded-full border border-blush-200 bg-cream-50 p-2.5 sm:px-4 sm:py-2.5 text-[13px] font-semibold text-wine-700 hover:bg-blush-50 active:scale-[0.97]"
             >
               <QrCode className="size-4" strokeWidth={2.25} />
-              <span>UPI Settings</span>
+              <span className="hidden sm:inline">UPI Settings</span>
             </button>
             <button
               type="button"
               onClick={downloadPDF}
               disabled={downloadingPdf || orders.length === 0}
-              className="tap inline-flex shrink-0 items-center gap-2 rounded-full border border-blush-200 bg-cream-50 px-4 py-2.5 text-[13px] font-semibold text-wine-700 hover:bg-blush-50 active:scale-[0.97] disabled:opacity-50"
+              title="Download PDF"
+              className="tap inline-flex shrink-0 items-center justify-center gap-2 rounded-full border border-blush-200 bg-cream-50 p-2.5 sm:px-4 sm:py-2.5 text-[13px] font-semibold text-wine-700 hover:bg-blush-50 active:scale-[0.97] disabled:opacity-50"
             >
               {downloadingPdf ? (
                 <Spinner size={14} />
               ) : (
                 <FileDown className="size-4" strokeWidth={2.25} />
               )}
-              <span>{downloadingPdf ? 'Exporting…' : 'Download PDF'}</span>
+              <span className="hidden sm:inline">{downloadingPdf ? 'Exporting…' : 'Download PDF'}</span>
             </button>
             <button
               type="button"
