@@ -849,17 +849,42 @@ function QrPaymentModal({ open, onClose, order, upiId, onConfigureUpi }) {
     showToast('Payment card downloaded!', 'success');
   };
 
-  const getShareText = () => {
-    const upiUrl = `upi://pay?pa=${upiId}&pn=Shri%20Hari%20Sweets&am=${order.totalPrice}&cu=INR&tn=Order`;
-    return `✨ *SHRI HARI SWEETS* ✨\n------------------------------------------\n🙏 *Thanks for your order!*\n\n*Name:* _${order.customerName}_\n${order.phoneNumber ? `*Mobile:* _${order.phoneNumber}_\n` : ''}*Amount to Pay:* *₹${Number(order.totalPrice).toLocaleString('en-IN')}*\n\n🔗 *Pay directly via UPI:*\n${upiUrl}\n------------------------------------------\nScan the QR code or click the link above to pay. Please reply with a screenshot once paid!`;
+  const copyImageToClipboard = async () => {
+    if (!imgUrl) return false;
+    try {
+      const res = await fetch(imgUrl);
+      const blob = await res.blob();
+      if (navigator.clipboard && window.ClipboardItem) {
+        await navigator.clipboard.write([
+          new ClipboardItem({
+            [blob.type]: blob
+          })
+        ]);
+        return true;
+      }
+    } catch (err) {
+      console.error('Failed to copy image to clipboard:', err);
+    }
+    return false;
   };
+
+  const handleCopyImage = async () => {
+    const success = await copyImageToClipboard();
+    if (success) {
+      showToast('Payment card image copied to clipboard!', 'success');
+    } else {
+      showToast('Clipboard API not supported. Please save the image instead.', 'error');
+    }
+  };
+
+
 
   const handleWhatsAppShare = () => {
     try {
-      const text = getShareText();
+      const upiUrl = `upi://pay?pa=${upiId}&pn=Shri%20Hari%20Sweets&am=${order.totalPrice}&cu=INR&tn=Order`;
       const cleanPhone = order.phoneNumber.replace(/\D/g, '');
       const formattedPhone = cleanPhone.length === 10 ? `91${cleanPhone}` : cleanPhone;
-      const url = `https://wa.me/${formattedPhone}?text=${encodeURIComponent(text)}`;
+      const url = `https://wa.me/${formattedPhone}?text=${encodeURIComponent(upiUrl)}`;
       window.open(url, '_blank');
       showToast('Opening WhatsApp...', 'success');
     } catch (err) {
@@ -871,26 +896,13 @@ function QrPaymentModal({ open, onClose, order, upiId, onConfigureUpi }) {
     if (!imgUrl) return;
     setSharing(true);
     try {
-      const res = await fetch(imgUrl);
-      const blob = await res.blob();
-      const file = new File([blob], `shri_hari_sweets_pay.png`, { type: 'image/png' });
-
-      const shareData = {
-        files: [file],
-        title: 'Shri Hari Sweets Payment QR',
-        text: `Thanks for your order! Amount to pay: ₹${Number(order.totalPrice).toLocaleString('en-IN')}`,
-      };
-
-      if (navigator.canShare && navigator.canShare(shareData)) {
-        await navigator.share(shareData);
-        showToast('Shared successfully!', 'success');
-      } else {
-        handleDownload();
-        handleWhatsAppShare();
+      const copied = await copyImageToClipboard();
+      handleWhatsAppShare();
+      if (copied) {
+        showToast('Image copied! Just paste in the WhatsApp chat.', 'success');
       }
     } catch (err) {
-      handleDownload();
-      handleWhatsAppShare();
+      showToast('Failed to copy card image.', 'error');
     } finally {
       setSharing(false);
     }
@@ -951,11 +963,11 @@ function QrPaymentModal({ open, onClose, order, upiId, onConfigureUpi }) {
               
               <button
                 type="button"
-                onClick={handleWhatsAppShare}
+                onClick={handleCopyImage}
                 className="tap flex items-center justify-center gap-1.5 rounded-xl border border-blush-200 bg-cream-50 py-2.5 text-xs font-semibold text-wine-700 hover:bg-blush-50"
               >
                 <Copy className="size-3.5" />
-                <span>Send Text Link</span>
+                <span>Copy Image</span>
               </button>
             </div>
           </div>
