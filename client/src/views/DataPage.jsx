@@ -1,10 +1,13 @@
-import React, { useMemo, useState } from 'react';
+import React, { useMemo, useState, useEffect, useRef } from 'react';
+import { createPortal } from 'react-dom';
 import { useOrderController } from '../controllers/orderContext';
 import { PageHeading } from './OverviewPage';
 import Skeleton from './ui/Skeleton';
 import Spinner from './ui/Spinner';
 import EmptyState from './ui/EmptyState';
 import ConfirmDialog from './ui/ConfirmDialog';
+import useBodyLock from '../hooks/useBodyLock';
+import QRCode from 'qrcode';
 import {
   CalendarDays,
   Check,
@@ -18,6 +21,7 @@ import {
   X,
   FileDown,
   Copy,
+  QrCode,
 } from 'lucide-react';
 
 const FILTERS = [
@@ -49,11 +53,30 @@ export default function DataPage() {
     rowPending,
     downloadPDF,
     downloadingPdf,
+    upiId,
+    saveUpiId,
   } = useOrderController();
 
   const [query, setQuery] = useState('');
   const [filter, setFilter] = useState('all');
   const [confirm, setConfirm] = useState(null); // { id, name }
+  const [upiModalOpen, setUpiModalOpen] = useState(false);
+  const [qrModalOpen, setQrModalOpen] = useState(false);
+  const [selectedOrderForQr, setSelectedOrderForQr] = useState(null);
+
+  const handleSaveUpiId = async (newUpiId) => {
+    try {
+      await saveUpiId(newUpiId);
+      setUpiModalOpen(false);
+    } catch {
+      // Toast already shown
+    }
+  };
+
+  const handleOpenQrModal = (order) => {
+    setSelectedOrderForQr(order);
+    setQrModalOpen(true);
+  };
 
   const counts = useMemo(
     () => ({
@@ -106,6 +129,14 @@ export default function DataPage() {
         }
         action={
           <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={() => setUpiModalOpen(true)}
+              className="tap inline-flex shrink-0 items-center gap-2 rounded-full border border-blush-200 bg-cream-50 px-4 py-2.5 text-[13px] font-semibold text-wine-700 hover:bg-blush-50 active:scale-[0.97]"
+            >
+              <QrCode className="size-4" strokeWidth={2.25} />
+              <span>UPI Settings</span>
+            </button>
             <button
               type="button"
               onClick={downloadPDF}
@@ -212,6 +243,7 @@ export default function DataPage() {
                 onToggle={() => toggleOrderPayment(id)}
                 onEdit={() => openOrderModal(order)}
                 onDelete={() => setConfirm({ id, name: order.customerName })}
+                onQrCode={() => handleOpenQrModal(order)}
               />
             );
           })}
@@ -229,6 +261,21 @@ export default function DataPage() {
         pending={confirm ? rowPending[confirm.id] === 'delete' : false}
         onConfirm={handleConfirmDelete}
         onCancel={() => setConfirm(null)}
+      />
+
+      <UpiSettingsModal
+        open={upiModalOpen}
+        onClose={() => setUpiModalOpen(false)}
+        onSave={handleSaveUpiId}
+        currentUpiId={upiId}
+      />
+
+      <QrPaymentModal
+        open={qrModalOpen}
+        onClose={() => setQrModalOpen(false)}
+        order={selectedOrderForQr}
+        upiId={upiId}
+        onConfigureUpi={() => setUpiModalOpen(true)}
       />
     </div>
   );
@@ -279,7 +326,7 @@ function SegmentedFilter({ value, counts, onChange }) {
 
 /* ───────────────── order card ───────────────── */
 
-function OrderCard({ order, pending, onToggle, onEdit, onDelete }) {
+function OrderCard({ order, pending, onToggle, onEdit, onDelete, onQrCode }) {
   const paid = order.status === 'paid';
   const deleting = pending === 'delete';
   const toggling = pending === 'toggle';
@@ -420,6 +467,11 @@ function OrderCard({ order, pending, onToggle, onEdit, onDelete }) {
               variant="whatsapp"
             />
           )}
+          <IconButton
+            label="Generate Payment QR"
+            onClick={onQrCode}
+            icon={QrCode}
+          />
           <IconButton label="Copy details" onClick={handleCopy} icon={Copy} />
           <IconButton label="Edit order" onClick={onEdit} icon={Pencil} />
           <IconButton label="Delete order" onClick={onDelete} icon={Trash2} danger />
@@ -517,5 +569,397 @@ function DataSkeleton() {
         ))}
       </div>
     </div>
+  );
+}
+
+/* ───────────────── UPI ID Settings Modal ───────────────── */
+
+function UpiSettingsModal({ open, onClose, onSave, currentUpiId }) {
+  const [upiInput, setUpiInput] = useState(currentUpiId);
+  const [error, setError] = useState('');
+  useBodyLock(open);
+
+  useEffect(() => {
+    if (open) {
+      setUpiInput(currentUpiId);
+      setError('');
+    }
+  }, [open, currentUpiId]);
+
+  if (!open) return null;
+
+  const handleSave = (e) => {
+    e.preventDefault();
+    const clean = upiInput.trim();
+    if (!clean) {
+      setError('UPI ID cannot be empty');
+      return;
+    }
+    if (!clean.includes('@')) {
+      setError('Invalid UPI ID format (must contain @)');
+      return;
+    }
+    onSave(clean);
+  };
+
+  return createPortal(
+    <div
+      role="dialog"
+      aria-modal="true"
+      className="fixed inset-0 z-[70] flex items-center justify-center p-5 animate-fade-in"
+    >
+      <div
+        className="absolute inset-0 bg-plum-950/55 backdrop-blur-[3px]"
+        onClick={onClose}
+      />
+
+      <div className="anim-dialog relative w-full max-w-[360px] overflow-hidden rounded-2xl border border-blush-100 bg-cream-50 shadow-float">
+        <header className="flex items-center justify-between border-b border-blush-100 px-5 py-4">
+          <h3 className="font-display text-lg font-semibold text-plum-900">UPI Settings</h3>
+          <button
+            type="button"
+            onClick={onClose}
+            className="tap flex size-8 items-center justify-center rounded-lg text-ink-400 hover:bg-blush-50 hover:text-wine-700"
+          >
+            <X className="size-4" />
+          </button>
+        </header>
+
+        <form onSubmit={handleSave} className="p-5">
+          <div className="space-y-4">
+            <div>
+              <label htmlFor="upi-id-input" className="block text-xs font-semibold text-ink-500 uppercase tracking-wider mb-2">
+                Merchant UPI ID
+              </label>
+              <input
+                id="upi-id-input"
+                type="text"
+                value={upiInput}
+                onChange={(e) => setUpiInput(e.target.value)}
+                placeholder="e.g. merchant@upi"
+                className="tap w-full rounded-xl border border-blush-100 bg-cream-50 px-4 py-3 text-[14px] font-medium text-ink-900 outline-none focus:border-wine-600/40 focus:ring-4 focus:ring-wine-700/8"
+                autoFocus
+              />
+              {error && (
+                <p className="mt-1.5 text-xs text-clay-500 font-semibold">{error}</p>
+              )}
+            </div>
+            <p className="text-xs text-ink-400 leading-relaxed">
+              This UPI ID will be used to generate scan-to-pay QR codes for your customers.
+            </p>
+          </div>
+
+          <div className="mt-6 flex justify-end gap-3">
+            <button
+              type="button"
+              onClick={onClose}
+              className="tap rounded-xl border border-blush-200 bg-cream-50 px-4 py-2.5 text-sm font-semibold text-wine-700 hover:bg-blush-50"
+            >
+              Cancel
+            </button>
+            <button
+              type="submit"
+              className="tap rounded-xl bg-wine-700 px-5 py-2.5 text-sm font-semibold text-cream-50 hover:bg-wine-600 shadow-lift"
+            >
+              Save
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>,
+    document.body
+  );
+}
+
+/* ───────────────── Payment QR Code Modal ───────────────── */
+
+function QrPaymentModal({ open, onClose, order, upiId, onConfigureUpi }) {
+  const canvasRef = useRef(null);
+  const [imgUrl, setImgUrl] = useState('');
+  const [sharing, setSharing] = useState(false);
+  const { showToast } = useOrderController();
+
+  useBodyLock(open);
+
+  useEffect(() => {
+    if (!open || !order || !upiId) return;
+
+    const drawCard = async () => {
+      try {
+        const upiUrl = `upi://pay?pa=${upiId}&pn=Shri%20Hari%20Sweets&am=${order.totalPrice}&cu=INR&tn=Order`;
+        
+        const qrDataUrl = await QRCode.toDataURL(upiUrl, {
+          margin: 1,
+          width: 520,
+          color: {
+            dark: '#2c1620',
+            light: '#ffffff'
+          }
+        });
+
+        const canvas = canvasRef.current;
+        if (!canvas) return;
+
+        const ctx = canvas.getContext('2d');
+        const scale = 2;
+        const width = 300 * scale;
+        const height = 440 * scale;
+        canvas.width = width;
+        canvas.height = height;
+
+        ctx.clearRect(0, 0, width, height);
+
+        // Fill background
+        ctx.fillStyle = '#fbf9fa';
+        ctx.fillRect(0, 0, width, height);
+
+        // Border
+        ctx.strokeStyle = '#6b2b3a';
+        ctx.lineWidth = 4 * scale;
+        ctx.strokeRect(2 * scale, 2 * scale, width - 4 * scale, height - 4 * scale);
+
+        // Header Title
+        ctx.fillStyle = '#6b2b3a';
+        ctx.font = `bold ${18 * scale}px "Fraunces", Georgia, serif`;
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'top';
+        ctx.fillText('SHRI HARI SWEETS', width / 2, 28 * scale);
+
+        // Divider
+        ctx.strokeStyle = '#ecdee4';
+        ctx.lineWidth = 1 * scale;
+        ctx.beginPath();
+        ctx.moveTo(30 * scale, 56 * scale);
+        ctx.lineTo(270 * scale, 56 * scale);
+        ctx.stroke();
+
+        // Subtitle
+        ctx.fillStyle = '#98737f';
+        ctx.font = `600 ${9 * scale}px "Inter", sans-serif`;
+        ctx.fillText('SCAN & PAY VIA ANY UPI APP', width / 2, 68 * scale);
+
+        // Draw QR Image
+        const qrImg = new Image();
+        qrImg.src = qrDataUrl;
+        await new Promise((resolve) => {
+          qrImg.onload = resolve;
+        });
+
+        const qrSize = 180 * scale;
+        const qrX = (width - qrSize) / 2;
+        const qrY = 92 * scale;
+        ctx.drawImage(qrImg, qrX, qrY, qrSize, qrSize);
+
+
+
+        // Divider
+        ctx.strokeStyle = '#ecdee4';
+        ctx.lineWidth = 1 * scale;
+        ctx.beginPath();
+        ctx.moveTo(30 * scale, 292 * scale);
+        ctx.lineTo(270 * scale, 292 * scale);
+        ctx.stroke();
+
+        // Customer Details
+        ctx.textBaseline = 'top';
+        
+        // Customer Name
+        ctx.fillStyle = '#2a2a2e';
+        ctx.font = `600 ${12 * scale}px "Inter", sans-serif`;
+        ctx.fillText(order.customerName, width / 2, 308 * scale);
+
+        // Phone Number (if present)
+        let currentY = 328 * scale;
+        if (order.phoneNumber) {
+          ctx.fillStyle = '#6f6b74';
+          ctx.font = `500 ${10 * scale}px "Inter", sans-serif`;
+          ctx.fillText(order.phoneNumber, width / 2, currentY);
+          currentY += 18 * scale;
+        }
+
+        // Amount to Pay
+        ctx.fillStyle = '#6b2b3a';
+        ctx.font = `bold ${18 * scale}px "Inter", sans-serif`;
+        ctx.fillText(`₹${Number(order.totalPrice || 0).toLocaleString('en-IN')}`, width / 2, currentY);
+
+        // Footer Thank You
+        ctx.fillStyle = '#98737f';
+        ctx.font = `italic ${9 * scale}px "Fraunces", Georgia, serif`;
+        ctx.fillText('Thank you for your order!', width / 2, 400 * scale);
+
+        const dataUrl = canvas.toDataURL('image/png');
+        setImgUrl(dataUrl);
+      } catch (err) {
+        console.error('Failed to draw canvas card:', err);
+      }
+    };
+
+    drawCard();
+  }, [open, order, upiId]);
+
+  if (!open || !order) return null;
+
+  if (!upiId) {
+    return createPortal(
+      <div role="dialog" aria-modal="true" className="fixed inset-0 z-[70] flex items-center justify-center p-5">
+        <div className="absolute inset-0 bg-plum-950/55 backdrop-blur-[3px]" onClick={onClose} />
+        <div className="anim-dialog relative w-full max-w-[340px] overflow-hidden rounded-2xl border border-blush-100 bg-cream-50 shadow-float p-6 text-center">
+          <div className="mx-auto mb-4 flex size-11 items-center justify-center rounded-xl bg-blush-50 text-wine-700">
+            <QrCode className="size-5" />
+          </div>
+          <h3 className="font-display text-lg font-semibold text-plum-900">UPI ID Required</h3>
+          <p className="mt-2 text-sm text-ink-500 leading-relaxed">
+            Please configure your merchant UPI ID first so we can generate payment QR codes.
+          </p>
+          <div className="mt-6 flex flex-col gap-2">
+            <button
+              type="button"
+              onClick={() => {
+                onClose();
+                onConfigureUpi();
+              }}
+              className="tap w-full rounded-xl bg-wine-700 py-3 text-sm font-semibold text-cream-50 hover:bg-wine-600 shadow-lift"
+            >
+              Configure UPI ID
+            </button>
+            <button
+              type="button"
+              onClick={onClose}
+              className="tap w-full rounded-xl border border-blush-200 py-3 text-sm font-semibold text-wine-700 hover:bg-blush-50"
+            >
+              Cancel
+            </button>
+          </div>
+        </div>
+      </div>,
+      document.body
+    );
+  }
+
+  const handleDownload = () => {
+    if (!imgUrl) return;
+    const a = document.createElement('a');
+    a.href = imgUrl;
+    a.download = `shri_hari_sweets_pay_${order.customerName.replace(/\s+/g, '_')}.png`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    showToast('Payment card downloaded!', 'success');
+  };
+
+  const getShareText = () => {
+    const upiUrl = `upi://pay?pa=${upiId}&pn=Shri%20Hari%20Sweets&am=${order.totalPrice}&cu=INR&tn=Order`;
+    return `✨ *SHRI HARI SWEETS* ✨\n------------------------------------------\n🙏 *Thanks for your order!*\n\n*Name:* _${order.customerName}_\n${order.phoneNumber ? `*Mobile:* _${order.phoneNumber}_\n` : ''}*Amount to Pay:* *₹${Number(order.totalPrice).toLocaleString('en-IN')}*\n\n🔗 *Pay directly via UPI:*\n${upiUrl}\n------------------------------------------\nScan the QR code or click the link above to pay. Please reply with a screenshot once paid!`;
+  };
+
+  const handleWhatsAppShare = () => {
+    try {
+      const text = getShareText();
+      const cleanPhone = order.phoneNumber.replace(/\D/g, '');
+      const formattedPhone = cleanPhone.length === 10 ? `91${cleanPhone}` : cleanPhone;
+      const url = `https://wa.me/${formattedPhone}?text=${encodeURIComponent(text)}`;
+      window.open(url, '_blank');
+      showToast('Opening WhatsApp...', 'success');
+    } catch (err) {
+      showToast('Failed to open WhatsApp.', 'error');
+    }
+  };
+
+  const handleWebShare = async () => {
+    if (!imgUrl) return;
+    setSharing(true);
+    try {
+      const res = await fetch(imgUrl);
+      const blob = await res.blob();
+      const file = new File([blob], `shri_hari_sweets_pay.png`, { type: 'image/png' });
+
+      const shareData = {
+        files: [file],
+        title: 'Shri Hari Sweets Payment QR',
+        text: `Thanks for your order! Amount to pay: ₹${Number(order.totalPrice).toLocaleString('en-IN')}`,
+      };
+
+      if (navigator.canShare && navigator.canShare(shareData)) {
+        await navigator.share(shareData);
+        showToast('Shared successfully!', 'success');
+      } else {
+        handleDownload();
+        handleWhatsAppShare();
+      }
+    } catch (err) {
+      handleDownload();
+      handleWhatsAppShare();
+    } finally {
+      setSharing(false);
+    }
+  };
+
+  return createPortal(
+    <div role="dialog" aria-modal="true" className="fixed inset-0 z-[70] flex items-center justify-center p-5">
+      <div className="absolute inset-0 bg-plum-950/55 backdrop-blur-[3px]" onClick={onClose} />
+
+      <div className="anim-dialog relative w-full max-w-[340px] overflow-hidden rounded-2xl border border-blush-100 bg-cream-50 shadow-float animate-fade-in">
+        <header className="flex items-center justify-between border-b border-blush-100 px-5 py-4">
+          <h3 className="font-display text-lg font-semibold text-plum-900">Payment QR</h3>
+          <button
+            type="button"
+            onClick={onClose}
+            className="tap flex size-8 items-center justify-center rounded-lg text-ink-400 hover:bg-blush-50 hover:text-wine-700"
+          >
+            <X className="size-4" />
+          </button>
+        </header>
+
+        <div className="p-5 flex flex-col items-center">
+          <canvas ref={canvasRef} style={{ display: 'none' }} />
+
+          {imgUrl ? (
+            <img
+              src={imgUrl}
+              alt="Payment Card QR"
+              className="w-[240px] h-[352px] rounded-xl border border-blush-100 shadow-card object-contain bg-white"
+            />
+          ) : (
+            <div className="w-[240px] h-[352px] rounded-xl border border-blush-100 flex items-center justify-center bg-cream-100">
+              <Spinner size={24} className="text-wine-700" />
+            </div>
+          )}
+
+          <div className="mt-5 w-full flex flex-col gap-2">
+            <button
+              type="button"
+              onClick={handleWebShare}
+              disabled={sharing || !imgUrl}
+              className="tap flex w-full items-center justify-center gap-2 rounded-xl bg-emerald-600 py-3 text-sm font-semibold text-cream-50 hover:bg-emerald-500 shadow-lift disabled:opacity-50"
+            >
+              {sharing ? <Spinner size={14} /> : <WhatsAppIcon className="size-4 text-white" />}
+              <span>Share Card on WhatsApp</span>
+            </button>
+
+            <div className="grid grid-cols-2 gap-2">
+              <button
+                type="button"
+                onClick={handleDownload}
+                disabled={!imgUrl}
+                className="tap flex items-center justify-center gap-1.5 rounded-xl border border-blush-200 bg-cream-50 py-2.5 text-xs font-semibold text-wine-700 hover:bg-blush-50 disabled:opacity-50"
+              >
+                <FileDown className="size-3.5" />
+                <span>Save Image</span>
+              </button>
+              
+              <button
+                type="button"
+                onClick={handleWhatsAppShare}
+                className="tap flex items-center justify-center gap-1.5 rounded-xl border border-blush-200 bg-cream-50 py-2.5 text-xs font-semibold text-wine-700 hover:bg-blush-50"
+              >
+                <Copy className="size-3.5" />
+                <span>Send Text Link</span>
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>,
+    document.body
   );
 }

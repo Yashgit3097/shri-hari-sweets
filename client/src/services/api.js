@@ -54,3 +54,22 @@ export const fetchOrdersPDFBlob = async () => {
   return res.blob();
 };
 
+const SETTINGS_API_BASE = 'https://shri-hari-sweets.onrender.com/api/settings';
+
+export const fetchUpiIdSetting = async () => {
+  const res = await fetch(`${SETTINGS_API_BASE}/upiId`);
+  if (!res.ok) throw new Error("Failed to fetch UPI ID");
+  const data = await res.json();
+  return data.value || '';
+};
+
+export const updateUpiIdSetting = async (upiId) => {
+  const res = await fetch(`${SETTINGS_API_BASE}/upiId`, {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ value: upiId })
+  });
+  if (!res.ok) throw new Error("Failed to update UPI ID");
+  return res.json();
+};
+

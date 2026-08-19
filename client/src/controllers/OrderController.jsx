@@ -6,6 +6,8 @@ import {
   deleteOrder,
   togglePaymentStatus,
   fetchOrdersPDFBlob,
+  fetchUpiIdSetting,
+  updateUpiIdSetting,
 } from '../services/api';
 import { socket } from '../services/socket';
 import { OrderContext, STATUS } from './orderContext';
@@ -34,6 +36,7 @@ export const OrderProvider = ({ children }) => {
   const [activeTab, setActiveTab] = useState('overview'); // 'overview' | 'data'
   const [modal, setModal] = useState({ open: false, order: null });
   const [toasts, setToasts] = useState([]);
+  const [upiId, setUpiId] = useState('');
 
   const timersRef = useRef(new Map());
   const hasConnectedOnce = useRef(false);
@@ -102,12 +105,23 @@ export const OrderProvider = ({ children }) => {
      mirror the socket's state into React. Both legitimately set state. */
   useEffect(() => {
     loadOrders();
+    
+    const loadSettings = async () => {
+      try {
+        const id = await fetchUpiIdSetting();
+        setUpiId(id);
+      } catch (err) {
+        console.error("Failed to load settings:", err);
+      }
+    };
+    loadSettings();
 
     const onConnect = () => {
       setConnection('live');
       if (hasConnectedOnce.current) {
         showToast('Back online — data is live again.', 'success');
         loadOrders({ silent: true });
+        loadSettings();
       }
       hasConnectedOnce.current = true;
     };
@@ -126,10 +140,17 @@ export const OrderProvider = ({ children }) => {
       setStatus(STATUS.READY);
     };
 
+    const onSettingUpdated = ({ key, value }) => {
+      if (key === 'upiId') {
+        setUpiId(value);
+      }
+    };
+
     socket.on('connect', onConnect);
     socket.on('disconnect', onDisconnect);
     socket.on('connect_error', onConnectError);
     socket.on('data-updated', onDataUpdated);
+    socket.on('setting-updated', onSettingUpdated);
 
     if (socket.connected) onConnect();
 
@@ -139,6 +160,7 @@ export const OrderProvider = ({ children }) => {
       socket.off('disconnect', onDisconnect);
       socket.off('connect_error', onConnectError);
       socket.off('data-updated', onDataUpdated);
+      socket.off('setting-updated', onSettingUpdated);
       timers.forEach((t) => clearTimeout(t));
       timers.clear();
     };
@@ -302,6 +324,17 @@ export const OrderProvider = ({ children }) => {
     }
   }, [showToast]);
 
+  const saveUpiId = useCallback(async (newUpiId) => {
+    try {
+      await updateUpiIdSetting(newUpiId);
+      setUpiId(newUpiId);
+      showToast("UPI ID saved and synced across devices.", "success");
+    } catch (err) {
+      showToast(err?.message || "Could not save UPI ID.", "error");
+      throw err;
+    }
+  }, [showToast]);
+
   return (
     <OrderContext.Provider
       value={{
@@ -335,6 +368,8 @@ export const OrderProvider = ({ children }) => {
         removeOrder,
         toggleOrderPayment,
         downloadPDF,
+        upiId,
+        saveUpiId,
       }}
     >
       {children}

@@ -6,7 +6,9 @@ import cors from 'cors';
 import dotenv from 'dotenv';
 import { connectDB } from './config/db.js';
 import orderRoutes from './routes/orderRoutes.js';
+import settingRoutes from './routes/settingRoutes.js';
 import Order from './models/Order.js';
+import Setting from './models/Setting.js';
 
 // Load environment variables
 dotenv.config();
@@ -35,6 +37,7 @@ app.set('io', io);
 
 // Mount API Routes
 app.use('/api/orders', orderRoutes);
+app.use('/api/settings', settingRoutes);
 
 // Health Check Endpoint
 app.get('/health', (req, res) => {
@@ -61,12 +64,15 @@ if (selfUrl) {
 io.on('connection', async (socket) => {
   console.log('Client connected:', socket.id);
   
-  // Send current orders to newly connected client
+  // Send current orders and settings to newly connected client
   try {
     const orders = await Order.find({}).sort({ createdAt: -1 });
     socket.emit('data-updated', orders);
+
+    const upiSetting = await Setting.findOne({ key: 'upiId' });
+    socket.emit('setting-updated', { key: 'upiId', value: upiSetting ? upiSetting.value : '' });
   } catch (err) {
-    console.error("Error fetching orders on connection:", err.message);
+    console.error("Error fetching data on connection:", err.message);
   }
 
   socket.on('disconnect', () => {
