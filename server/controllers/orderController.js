@@ -127,7 +127,7 @@ export const togglePaymentStatus = async (req, res) => {
 // @access  Public
 export const downloadOrdersPDF = async (req, res) => {
   try {
-    const orders = await Order.find({}).sort({ createdAt: -1 });
+    const orders = await Order.find({}).sort({ createdAt: 1 });
     
     // Set response headers for PDF download
     res.setHeader('Content-Type', 'application/pdf');

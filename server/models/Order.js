@@ -4,7 +4,13 @@ const itemSchema = new mongoose.Schema({
   itemName: { 
     type: String, 
     required: true, 
-    enum: ["Kaju Kasata", "Kaju Mahesur", "Kaju Katri"] 
+    enum: [
+      "Kesar Kaju Katri",
+      "Kaju Katri",
+      "Kaju Kasata",
+      "Kaju Mahesur",
+      "Kesar Dryfruit Ghari"
+    ] 
   },
   weight: { 
     type: Number, 

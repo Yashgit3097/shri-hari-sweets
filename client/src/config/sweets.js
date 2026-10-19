@@ -1,15 +1,19 @@
 export const SWEETS_PRICES = {
-  "Kaju Katri": {
-    250: 205,
-    500: 410
+  "Kesar Kaju Katri": {
+    250: 207.5,
+    500: 415
   },
   "Kaju Kasata": {
     250: 225,
     500: 450
   },
   "Kaju Mahesur": {
-    250: 167.5,
-    500: 335
+    250: 170,
+    500: 340
+  },
+  "Kesar Dryfruit Ghari": {
+    250: 175,
+    500: 350
   }
 };
 
@@ -23,6 +27,10 @@ export const WEIGHT_OPTIONS = [
 export const getPredefinedPrice = (itemName, weight) => {
   if (SWEETS_PRICES[itemName] && SWEETS_PRICES[itemName][weight]) {
     return SWEETS_PRICES[itemName][weight];
+  }
+  // Alias for backward compatibility if "Kaju Katri" is passed
+  if (itemName === "Kaju Katri" && SWEETS_PRICES["Kesar Kaju Katri"]) {
+    return SWEETS_PRICES["Kesar Kaju Katri"][weight] || 0;
   }
   return 0;
 };
