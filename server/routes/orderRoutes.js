@@ -5,6 +5,7 @@ import {
   updateOrder, 
   deleteOrder, 
   togglePaymentStatus,
+  toggleDeliveryStatus,
   downloadOrdersPDF
 } from '../controllers/orderController.js';
 
@@ -23,5 +24,8 @@ router.route('/:id')
 
 router.route('/:id/toggle-payment')
   .patch(togglePaymentStatus);
+
+router.route('/:id/toggle-delivery')
+  .patch(toggleDeliveryStatus);
 
 export default router;

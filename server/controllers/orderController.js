@@ -31,7 +31,7 @@ export const getOrders = async (req, res) => {
 // @access  Public
 export const createOrder = async (req, res) => {
   try {
-    const { customerName, phoneNumber, items, totalPrice, status } = req.body;
+    const { customerName, phoneNumber, items, totalPrice, status, isDelivered } = req.body;
 
     if (!customerName) {
       return res.status(400).json({ message: "Customer name is required" });
@@ -42,7 +42,8 @@ export const createOrder = async (req, res) => {
       phoneNumber,
       items,
       totalPrice,
-      status
+      status,
+      isDelivered: Boolean(isDelivered)
     });
 
     const savedOrder = await order.save();
@@ -59,7 +60,7 @@ export const createOrder = async (req, res) => {
 export const updateOrder = async (req, res) => {
   try {
     const { id } = req.params;
-    const { customerName, phoneNumber, items, totalPrice, status } = req.body;
+    const { customerName, phoneNumber, items, totalPrice, status, isDelivered } = req.body;
 
     const order = await Order.findById(id);
 
@@ -72,6 +73,7 @@ export const updateOrder = async (req, res) => {
     if (items !== undefined) order.items = items;
     if (totalPrice !== undefined) order.totalPrice = totalPrice;
     if (status !== undefined) order.status = status;
+    if (isDelivered !== undefined) order.isDelivered = Boolean(isDelivered);
 
     const updatedOrder = await order.save();
     await broadcastUpdate(req);
@@ -114,6 +116,27 @@ export const togglePaymentStatus = async (req, res) => {
     }
 
     order.status = order.status === 'paid' ? 'unpaid' : 'paid';
+    const updatedOrder = await order.save();
+    await broadcastUpdate(req);
+    res.json(updatedOrder);
+  } catch (error) {
+    res.status(400).json({ message: error.message });
+  }
+};
+
+// @desc    Toggle delivery status
+// @route   PATCH /api/orders/:id/toggle-delivery
+// @access  Public
+export const toggleDeliveryStatus = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const order = await Order.findById(id);
+
+    if (!order) {
+      return res.status(404).json({ message: "Order not found" });
+    }
+
+    order.isDelivered = !order.isDelivered;
     const updatedOrder = await order.save();
     await broadcastUpdate(req);
     res.json(updatedOrder);

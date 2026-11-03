@@ -75,6 +75,7 @@ export const generateOrdersPDF = (orders, destinationStream) => {
   let paidRevenue = 0;
   let unpaidRevenue = 0;
   let paidCount = 0;
+  let deliveredCount = 0;
   let totalBoxes = 0;
   let totalGrams = 0;
 
@@ -91,6 +92,10 @@ export const generateOrdersPDF = (orders, destinationStream) => {
       paidCount++;
     } else {
       unpaidRevenue += orderTotal;
+    }
+
+    if (o.isDelivered) {
+      deliveredCount++;
     }
 
     if (o.customerName) {
@@ -541,6 +546,16 @@ export const generateOrdersPDF = (orders, destinationStream) => {
        .font('Helvetica-Bold')
        .fontSize(6.5)
        .text(badgeText, 503, y + 9, { width: 36, align: 'center' });
+
+    if (order.isDelivered) {
+      doc.roundedRect(503, y + 20, 36, 11, 2.5)
+         .fillColor('#EBF5FB')
+         .fill();
+      doc.fillColor('#2471A3')
+         .font('Helvetica-Bold')
+         .fontSize(5.5)
+         .text('DELIVERED', 503, y + 22.5, { width: 36, align: 'center' });
+    }
     doc.restore();
 
     // Row bottom divider line
