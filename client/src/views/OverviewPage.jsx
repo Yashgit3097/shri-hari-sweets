@@ -1,4 +1,4 @@
-import React, { useMemo } from 'react';
+import React, { useMemo, useState } from 'react';
 import { useOrderController } from '../controllers/orderContext';
 import { SWEET_NAMES } from '../config/sweets';
 import useCountUp from '../hooks/useCountUp';
@@ -6,8 +6,10 @@ import Skeleton from './ui/Skeleton';
 import EmptyState from './ui/EmptyState';
 import {
   Boxes,
+  CheckCircle2,
   Clock3,
   IndianRupee,
+  PackageCheck,
   Scale,
   ShoppingBag,
   Users,
@@ -34,18 +36,30 @@ const weightLabel = (w) => (w === 1000 ? '1 kg' : `${w} g`);
 
 export default function OverviewPage() {
   const { orders, loading, downloadPDF, downloadingPdf } = useOrderController();
+  const [boxView, setBoxView] = useState('to_prepare'); // 'to_prepare' | 'all'
 
   const stats = useMemo(() => {
     let collected = 0;
     let pending = 0;
     let paidCount = 0;
+    let deliveredOrdersCount = 0;
     let totalBoxes = 0;
+    let boxesToPrepare = 0;
+    let deliveredBoxes = 0;
 
-    const weightMap = Object.fromEntries(SWEET_NAMES.map((n) => [n, 0]));
+    const weightMapTotal = Object.fromEntries(SWEET_NAMES.map((n) => [n, 0]));
+    const weightMapToPrepare = Object.fromEntries(SWEET_NAMES.map((n) => [n, 0]));
+    const weightMapDelivered = Object.fromEntries(SWEET_NAMES.map((n) => [n, 0]));
+
     const boxesMap = {};
     const customers = new Set();
 
     orders.forEach((order) => {
+      const isDelivered = Boolean(order.isDelivered);
+      if (isDelivered) {
+        deliveredOrdersCount += 1;
+      }
+
       if (order.status === 'paid') {
         collected += order.totalPrice || 0;
         paidCount += 1;
@@ -59,23 +73,54 @@ export default function OverviewPage() {
 
       (order.items || []).forEach(({ itemName, weight, qty }) => {
         const quantity = qty || 0;
-        weightMap[itemName] = (weightMap[itemName] || 0) + (weight || 0) * quantity;
+        const itemGrams = (weight || 0) * quantity;
+
         totalBoxes += quantity;
+        weightMapTotal[itemName] = (weightMapTotal[itemName] || 0) + itemGrams;
+
+        if (isDelivered) {
+          deliveredBoxes += quantity;
+          weightMapDelivered[itemName] = (weightMapDelivered[itemName] || 0) + itemGrams;
+        } else {
+          boxesToPrepare += quantity;
+          weightMapToPrepare[itemName] = (weightMapToPrepare[itemName] || 0) + itemGrams;
+        }
 
         const key = `${itemName}__${weight}`;
         if (!boxesMap[key]) {
-          boxesMap[key] = { itemName, weight, count: 0 };
+          boxesMap[key] = {
+            itemName,
+            weight,
+            total: 0,
+            toPrepare: 0,
+            delivered: 0,
+          };
         }
-        boxesMap[key].count += quantity;
+        boxesMap[key].total += quantity;
+        if (isDelivered) {
+          boxesMap[key].delivered += quantity;
+        } else {
+          boxesMap[key].toPrepare += quantity;
+        }
       });
     });
 
-    const weights = Object.entries(weightMap)
+    const weightsTotal = Object.entries(weightMapTotal)
       .map(([name, grams]) => ({ name, grams }))
       .sort((a, b) => b.grams - a.grams);
 
-    const boxes = Object.values(boxesMap).sort(
-      (a, b) => b.count - a.count || a.itemName.localeCompare(b.itemName)
+    const weightsToPrepare = Object.entries(weightMapToPrepare)
+      .map(([name, grams]) => ({ name, grams }))
+      .sort((a, b) => b.grams - a.grams);
+
+    const boxesList = Object.values(boxesMap);
+
+    const boxesTotal = [...boxesList].sort(
+      (a, b) => b.total - a.total || a.itemName.localeCompare(b.itemName)
+    );
+
+    const boxesToPrepareList = [...boxesList].sort(
+      (a, b) => b.toPrepare - a.toPrepare || b.total - a.total || a.itemName.localeCompare(b.itemName)
     );
 
     return {
@@ -84,12 +129,20 @@ export default function OverviewPage() {
       total: collected + pending,
       paidCount,
       unpaidCount: orders.length - paidCount,
+      deliveredOrdersCount,
+      pendingOrdersCount: orders.length - deliveredOrdersCount,
       totalBoxes,
+      boxesToPrepare,
+      deliveredBoxes,
       customerCount: customers.size,
-      weights,
-      maxWeight: Math.max(1, ...weights.map((w) => w.grams)),
-      boxes,
-      maxBoxes: Math.max(1, ...boxes.map((b) => b.count)),
+      weightsTotal,
+      weightsToPrepare,
+      maxWeightTotal: Math.max(1, ...weightsTotal.map((w) => w.grams)),
+      maxWeightToPrepare: Math.max(1, ...weightsToPrepare.map((w) => w.grams)),
+      boxesTotal,
+      boxesToPrepareList,
+      maxBoxesTotal: Math.max(1, ...boxesTotal.map((b) => b.total)),
+      maxBoxesToPrepare: Math.max(1, ...boxesToPrepareList.map((b) => b.toPrepare)),
     };
   }, [orders]);
 
@@ -138,8 +191,8 @@ export default function OverviewPage() {
             <StatTile
               icon={ShoppingBag}
               label="Orders"
-              value={stats.paidCount + stats.unpaidCount}
-              caption={`${stats.paidCount} settled`}
+              value={orders.length}
+              caption={`${stats.deliveredOrdersCount} delivered • ${stats.paidCount} paid`}
             />
             <StatTile
               icon={Users}
@@ -149,9 +202,13 @@ export default function OverviewPage() {
             />
             <StatTile
               icon={Boxes}
-              label="Boxes"
-              value={stats.totalBoxes}
-              caption="to prepare"
+              label={boxView === 'to_prepare' ? 'To Prepare' : 'Total Boxes'}
+              value={boxView === 'to_prepare' ? stats.boxesToPrepare : stats.totalBoxes}
+              caption={
+                boxView === 'to_prepare'
+                  ? `${stats.deliveredBoxes} delivered (${stats.totalBoxes} total)`
+                  : `${stats.boxesToPrepare} to prepare • ${stats.deliveredBoxes} delivered`
+              }
             />
             <StatTile
               icon={Clock3}
@@ -162,14 +219,81 @@ export default function OverviewPage() {
             />
           </div>
 
+          {/* Production view option toggle */}
+          <div className="lg:col-span-12">
+            <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between rounded-2xl border border-blush-100 bg-cream-50 p-3.5 sm:p-4 shadow-card">
+              <div className="flex items-center gap-2.5 min-w-0">
+                <span className="flex size-8 shrink-0 items-center justify-center rounded-lg bg-blush-50 text-wine-700">
+                  <PackageCheck className="size-4" strokeWidth={2.25} />
+                </span>
+                <div className="min-w-0">
+                  <h3 className="text-[13px] font-semibold text-plum-900 leading-tight">
+                    Production & Packaging
+                  </h3>
+                  <p className="text-[11px] text-ink-400 mt-0.5 truncate">
+                    {boxView === 'to_prepare'
+                      ? 'Delivered items deducted • Showing remaining boxes to prepare'
+                      : 'Showing total box distribution across all orders'}
+                  </p>
+                </div>
+              </div>
+
+              <div className="flex shrink-0 rounded-xl border border-blush-100 bg-cream-100 p-1 w-full sm:w-auto">
+                <button
+                  type="button"
+                  onClick={() => setBoxView('to_prepare')}
+                  aria-pressed={boxView === 'to_prepare'}
+                  className={`tap flex flex-1 sm:flex-none items-center justify-center gap-2 rounded-lg px-3.5 py-1.5 text-[12px] font-semibold transition-all ${
+                    boxView === 'to_prepare'
+                      ? 'bg-plum-900 text-cream-50 shadow-sm'
+                      : 'text-ink-500 hover:text-plum-900'
+                  }`}
+                >
+                  <span>To Prepare</span>
+                  <span
+                    className={`rounded px-1.5 py-0.2 text-[10px] font-bold tabular-nums ${
+                      boxView === 'to_prepare'
+                        ? 'bg-cream-50/20 text-cream-50'
+                        : 'bg-blush-100 text-ink-600'
+                    }`}
+                  >
+                    {stats.boxesToPrepare}
+                  </span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => setBoxView('all')}
+                  aria-pressed={boxView === 'all'}
+                  className={`tap flex flex-1 sm:flex-none items-center justify-center gap-2 rounded-lg px-3.5 py-1.5 text-[12px] font-semibold transition-all ${
+                    boxView === 'all'
+                      ? 'bg-plum-900 text-cream-50 shadow-sm'
+                      : 'text-ink-500 hover:text-plum-900'
+                  }`}
+                >
+                  <span>All Orders</span>
+                  <span
+                    className={`rounded px-1.5 py-0.2 text-[10px] font-bold tabular-nums ${
+                      boxView === 'all'
+                        ? 'bg-cream-50/20 text-cream-50'
+                        : 'bg-blush-100 text-ink-600'
+                    }`}
+                  >
+                    {stats.totalBoxes}
+                  </span>
+                </button>
+              </div>
+            </div>
+          </div>
+
           {/* Weight breakdown */}
           <div className="lg:col-span-5 xl:col-span-5">
-            <WeightCard stats={stats} />
+            <WeightCard stats={stats} boxView={boxView} />
           </div>
 
           {/* Box distribution */}
           <div className="lg:col-span-7 xl:col-span-7">
-            <BoxCard stats={stats} />
+            <BoxCard stats={stats} boxView={boxView} onSwitchView={() => setBoxView('all')} />
           </div>
         </div>
       )}
@@ -313,13 +437,20 @@ function SectionCard({ icon: Icon, title, meta, children }) {
   );
 }
 
-function WeightCard({ stats }) {
-  const totalGrams = stats.weights.reduce((s, w) => s + w.grams, 0);
+function WeightCard({ stats, boxView }) {
+  const isToPrepare = boxView === 'to_prepare';
+  const weights = isToPrepare ? stats.weightsToPrepare : stats.weightsTotal;
+  const maxWeight = isToPrepare ? stats.maxWeightToPrepare : stats.maxWeightTotal;
+  const totalGrams = weights.reduce((s, w) => s + w.grams, 0);
 
   return (
-    <SectionCard icon={Scale} title="Sweets by weight" meta={formatWeight(totalGrams)}>
+    <SectionCard
+      icon={Scale}
+      title={isToPrepare ? 'Sweets by weight (To prepare)' : 'Sweets by weight (Total)'}
+      meta={`${formatWeight(totalGrams)} ${isToPrepare ? 'to prepare' : 'total'}`}
+    >
       <ul className="space-y-4">
-        {stats.weights.map(({ name, grams }) => (
+        {weights.map(({ name, grams }) => (
           <li key={name}>
             <div className="flex items-baseline justify-between gap-3">
               <span className="truncate text-[13px] font-medium text-ink-800">{name}</span>
@@ -330,7 +461,7 @@ function WeightCard({ stats }) {
             <div className="mt-2 h-1.5 w-full overflow-hidden rounded-full bg-cream-200">
               <div
                 className="bar-fill h-full rounded-full bg-linear-to-r from-wine-700 to-wine-400"
-                style={{ width: `${(grams / stats.maxWeight) * 100}%` }}
+                style={{ width: `${(grams / maxWeight) * 100}%` }}
               />
             </div>
           </li>
@@ -340,40 +471,91 @@ function WeightCard({ stats }) {
   );
 }
 
-function BoxCard({ stats }) {
+function BoxCard({ stats, boxView, onSwitchView }) {
+  const isToPrepare = boxView === 'to_prepare';
+  const boxes = isToPrepare ? stats.boxesToPrepareList : stats.boxesTotal;
+
   return (
     <SectionCard
       icon={Boxes}
-      title="Box distribution"
-      meta={`${stats.totalBoxes} total`}
+      title={isToPrepare ? 'Box distribution (To prepare)' : 'Box distribution (All orders)'}
+      meta={
+        isToPrepare
+          ? `${stats.boxesToPrepare} to prepare • ${stats.deliveredBoxes} delivered`
+          : `${stats.totalBoxes} total`
+      }
     >
-      {stats.boxes.length === 0 ? (
+      {boxes.length === 0 ? (
         <p className="py-6 text-center text-[13px] text-ink-300">
           No boxes recorded yet.
         </p>
+      ) : isToPrepare && stats.boxesToPrepare === 0 ? (
+        <div className="py-8 text-center flex flex-col items-center justify-center">
+          <span className="flex size-10 items-center justify-center rounded-full bg-sage-50 text-sage-600 mb-2.5">
+            <CheckCircle2 className="size-5" />
+          </span>
+          <p className="text-[14px] font-semibold text-plum-900">
+            All boxes fulfilled & delivered!
+          </p>
+          <p className="text-[12px] text-ink-400 mt-1 max-w-xs">
+            All {stats.totalBoxes} boxes across {stats.deliveredOrdersCount} orders have been delivered.
+          </p>
+          {onSwitchView && (
+            <button
+              type="button"
+              onClick={onSwitchView}
+              className="tap mt-3 text-xs font-semibold text-wine-700 hover:underline"
+            >
+              View all orders total →
+            </button>
+          )}
+        </div>
       ) : (
         <ul className="grid grid-cols-1 gap-2 sm:grid-cols-2">
-          {stats.boxes.map(({ itemName, weight, count }) => (
-            <li
-              key={`${itemName}-${weight}`}
-              className="tap flex items-center justify-between gap-3 rounded-xl border border-blush-100/80 bg-blush-50/40 px-3.5 py-2.5 hover:border-blush-200 hover:bg-blush-50"
-            >
-              <div className="min-w-0">
-                <p className="truncate text-[13px] font-medium text-ink-800">
-                  {itemName}
-                </p>
-                <p className="mt-0.5 text-[11px] font-medium text-ink-400">
-                  {weightLabel(weight)} pack
-                </p>
-              </div>
-              <span className="shrink-0 rounded-lg bg-plum-900 px-2.5 py-1 text-[11px] font-semibold text-cream-50 tabular-nums">
-                {count}
-                <span className="ml-1 font-normal text-blush-300">
-                  {count === 1 ? 'box' : 'boxes'}
-                </span>
-              </span>
-            </li>
-          ))}
+          {boxes.map(({ itemName, weight, total, toPrepare, delivered }) => {
+            const count = isToPrepare ? toPrepare : total;
+            const isCompleted = isToPrepare && toPrepare === 0;
+
+            return (
+              <li
+                key={`${itemName}-${weight}`}
+                className={`tap flex items-center justify-between gap-3 rounded-xl border px-3.5 py-2.5 transition-colors ${
+                  isCompleted
+                    ? 'border-sage-200/60 bg-sage-50/30'
+                    : 'border-blush-100/80 bg-blush-50/40 hover:border-blush-200 hover:bg-blush-50'
+                }`}
+              >
+                <div className="min-w-0">
+                  <p className="truncate text-[13px] font-medium text-ink-800">
+                    {itemName}
+                  </p>
+                  <p className="mt-0.5 text-[11px] font-medium text-ink-400">
+                    {weightLabel(weight)} pack
+                    {delivered > 0 && (
+                      <span className="ml-1 font-semibold text-sky-700">
+                        • {delivered} delivered
+                      </span>
+                    )}
+                  </p>
+                </div>
+
+                <div className="shrink-0 flex items-center">
+                  {isCompleted ? (
+                    <span className="rounded-lg bg-sage-50 border border-sage-200/80 px-2.5 py-1 text-[11px] font-semibold text-sage-700">
+                      Fulfilled ✓
+                    </span>
+                  ) : (
+                    <span className="rounded-lg bg-plum-900 px-2.5 py-1 text-[11px] font-semibold text-cream-50 tabular-nums">
+                      {count}
+                      <span className="ml-1 font-normal text-blush-300">
+                        {isToPrepare ? 'to prepare' : (count === 1 ? 'box' : 'boxes')}
+                      </span>
+                    </span>
+                  )}
+                </div>
+              </li>
+            );
+          })}
         </ul>
       )}
     </SectionCard>

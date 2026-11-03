@@ -49,6 +49,7 @@ export default function DataPage() {
     loading,
     removeOrder,
     toggleOrderPayment,
+    toggleOrderDelivery,
     openOrderModal,
     rowPending,
     downloadPDF,
@@ -59,6 +60,7 @@ export default function DataPage() {
 
   const [query, setQuery] = useState('');
   const [filter, setFilter] = useState('all');
+  const [deliveryFilter, setDeliveryFilter] = useState('all'); // 'all' | 'undelivered' | 'delivered'
   const [confirm, setConfirm] = useState(null); // { id, name }
   const [upiModalOpen, setUpiModalOpen] = useState(false);
   const [qrModalOpen, setQrModalOpen] = useState(false);
@@ -83,6 +85,8 @@ export default function DataPage() {
       all: orders.length,
       paid: orders.filter((o) => o.status === 'paid').length,
       unpaid: orders.filter((o) => o.status !== 'paid').length,
+      delivered: orders.filter((o) => Boolean(o.isDelivered)).length,
+      undelivered: orders.filter((o) => !o.isDelivered).length,
     }),
     [orders]
   );
@@ -94,13 +98,20 @@ export default function DataPage() {
         filter === 'all' ||
         (filter === 'paid' ? order.status === 'paid' : order.status !== 'paid');
       if (!matchesStatus) return false;
+
+      const isDelivered = Boolean(order.isDelivered);
+      const matchesDelivery =
+        deliveryFilter === 'all' ||
+        (deliveryFilter === 'delivered' ? isDelivered : !isDelivered);
+      if (!matchesDelivery) return false;
+
       if (!q) return true;
       return (
         (order.customerName || '').toLowerCase().includes(q) ||
         (order.phoneNumber || '').includes(q)
       );
     });
-  }, [orders, query, filter]);
+  }, [orders, query, filter, deliveryFilter]);
 
   const handleConfirmDelete = async () => {
     if (!confirm) return;
@@ -115,7 +126,7 @@ export default function DataPage() {
 
   if (loading) return <DataSkeleton />;
 
-  const hasFilters = query.trim() !== '' || filter !== 'all';
+  const hasFilters = query.trim() !== '' || filter !== 'all' || deliveryFilter !== 'all';
 
   return (
     <div className="mx-auto max-w-6xl px-4 pb-6 pt-6 sm:px-6 sm:pt-8">
@@ -164,7 +175,7 @@ export default function DataPage() {
         }
       />
 
-      {/* Search + filters */}
+      {/* Search + payment filter */}
       <div className="anim-fade-up mt-6 flex flex-col gap-3 sm:flex-row sm:items-center">
         <div className="relative flex-1">
           <Search
@@ -192,6 +203,47 @@ export default function DataPage() {
         </div>
 
         <SegmentedFilter value={filter} counts={counts} onChange={setFilter} />
+      </div>
+
+      {/* Delivery status filter pills */}
+      <div className="anim-fade-up mt-3 flex items-center gap-1.5 overflow-x-auto no-scrollbar pb-0.5">
+        <span className="label-xs text-ink-400 shrink-0 mr-1">Delivery:</span>
+        {[
+          { id: 'all', label: 'All', count: counts.all },
+          { id: 'undelivered', label: 'Undelivered', count: counts.undelivered },
+          { id: 'delivered', label: 'Delivered', count: counts.delivered },
+        ].map((d) => {
+          const active = deliveryFilter === d.id;
+          return (
+            <button
+              key={d.id}
+              type="button"
+              onClick={() => setDeliveryFilter(d.id)}
+              className={`tap inline-flex shrink-0 items-center gap-1.5 rounded-full border px-3 py-1 text-[12px] font-semibold transition-all ${
+                active
+                  ? d.id === 'delivered'
+                    ? 'border-sky-300 bg-sky-50 text-sky-800 shadow-xs'
+                    : d.id === 'undelivered'
+                    ? 'border-wine-300 bg-blush-50 text-wine-800 shadow-xs'
+                    : 'border-plum-800 bg-plum-900 text-cream-50 shadow-xs'
+                  : 'border-blush-100 bg-cream-50 text-ink-500 hover:border-blush-200 hover:text-ink-900'
+              }`}
+            >
+              <span>{d.label}</span>
+              <span
+                className={`rounded px-1 text-[10px] tabular-nums font-bold ${
+                  active
+                    ? d.id === 'all'
+                      ? 'bg-cream-50/20 text-cream-50'
+                      : 'bg-white/70 text-ink-900'
+                    : 'text-ink-300'
+                }`}
+              >
+                {d.count}
+              </span>
+            </button>
+          );
+        })}
       </div>
 
       {/* Results */}
@@ -224,6 +276,7 @@ export default function DataPage() {
                   onClick={() => {
                     setQuery('');
                     setFilter('all');
+                    setDeliveryFilter('all');
                   }}
                   className="tap rounded-full border border-blush-200 bg-cream-50 px-5 py-2.5 text-[13px] font-semibold text-wine-700 hover:bg-blush-50"
                 >
@@ -243,6 +296,7 @@ export default function DataPage() {
                 order={order}
                 pending={rowPending[id]}
                 onToggle={() => toggleOrderPayment(id)}
+                onToggleDelivery={() => toggleOrderDelivery(id)}
                 onEdit={() => openOrderModal(order)}
                 onDelete={() => setConfirm({ id, name: order.customerName })}
                 onQrCode={() => handleOpenQrModal(order)}
@@ -328,10 +382,12 @@ function SegmentedFilter({ value, counts, onChange }) {
 
 /* ───────────────── order card ───────────────── */
 
-function OrderCard({ order, pending, onToggle, onEdit, onDelete, onQrCode }) {
+function OrderCard({ order, pending, onToggle, onToggleDelivery, onEdit, onDelete, onQrCode }) {
   const paid = order.status === 'paid';
+  const delivered = Boolean(order.isDelivered);
   const deleting = pending === 'delete';
   const toggling = pending === 'toggle';
+  const togglingDelivery = pending === 'toggle-delivery';
   const { showToast } = useOrderController();
 
   const generateMessageText = () => {
@@ -346,6 +402,7 @@ function OrderCard({ order, pending, onToggle, onEdit, onDelete, onQrCode }) {
       `------------------------------------------`,
       `*Name:* _${order.customerName}_`,
       order.phoneNumber ? `*Phone:* _${order.phoneNumber}_` : null,
+      `*Status:* ${paid ? 'PAID' : 'UNPAID'} | ${delivered ? 'DELIVERED' : 'UNDELIVERED'}`,
       ``,
       itemsList,
       ``,
@@ -362,7 +419,7 @@ function OrderCard({ order, pending, onToggle, onEdit, onDelete, onQrCode }) {
       const text = generateMessageText();
       await navigator.clipboard.writeText(text);
       showToast('Order details copied to clipboard!', 'success');
-    } catch (err) {
+    } catch {
       showToast('Failed to copy order details.', 'error');
     }
   };
@@ -374,10 +431,19 @@ function OrderCard({ order, pending, onToggle, onEdit, onDelete, onQrCode }) {
       const formattedPhone = cleanPhone.length === 10 ? `91${cleanPhone}` : cleanPhone;
       const url = `https://wa.me/${formattedPhone}?text=${encodeURIComponent(text)}`;
       window.open(url, '_blank');
-    } catch (err) {
+    } catch {
       showToast('Failed to open WhatsApp.', 'error');
     }
   };
+
+  // Border status rail color
+  const railClass = paid && delivered
+    ? 'bg-linear-to-b from-sage-500 to-sky-500'
+    : paid
+    ? 'bg-sage-500'
+    : delivered
+    ? 'bg-sky-500'
+    : 'bg-blush-300';
 
   return (
     <article
@@ -395,13 +461,11 @@ function OrderCard({ order, pending, onToggle, onEdit, onDelete, onQrCode }) {
 
       {/* status rail */}
       <span
-        className={`absolute inset-y-0 left-0 w-[3px] transition-colors duration-300 ${
-          paid ? 'bg-sage-500' : 'bg-blush-300'
-        }`}
+        className={`absolute inset-y-0 left-0 w-[3px] transition-colors duration-300 ${railClass}`}
       />
 
-      <header className="flex items-start justify-between gap-3 px-5 pb-3 pt-4">
-        <div className="min-w-0">
+      <header className="flex items-start justify-between gap-2 px-4 pb-3 pt-4 sm:px-5">
+        <div className="min-w-0 flex-1">
           <h3 className="truncate text-[15px] font-semibold tracking-tight text-plum-900">
             {order.customerName}
           </h3>
@@ -418,7 +482,14 @@ function OrderCard({ order, pending, onToggle, onEdit, onDelete, onQrCode }) {
           )}
         </div>
 
-        <StatusToggle paid={paid} pending={toggling} onClick={onToggle} />
+        <div className="flex shrink-0 items-center gap-1.5">
+          <StatusToggle paid={paid} pending={toggling} onClick={onToggle} />
+          <DeliveryToggle
+            delivered={delivered}
+            pending={togglingDelivery}
+            onClick={onToggleDelivery}
+          />
+        </div>
       </header>
 
       {/* items */}
@@ -491,7 +562,7 @@ function StatusToggle({ paid, pending, onClick }) {
       disabled={pending}
       title={paid ? 'Mark as unpaid' : 'Mark as paid'}
       aria-label={paid ? 'Mark as unpaid' : 'Mark as paid'}
-      className={`tap inline-flex shrink-0 items-center gap-1.5 rounded-full border py-1.5 pl-2 pr-3 text-[11px] font-semibold active:scale-95 disabled:cursor-progress ${
+      className={`tap inline-flex shrink-0 items-center gap-1.5 rounded-full border py-1.5 pl-2 pr-2.5 sm:pr-3 text-[11px] font-semibold active:scale-95 disabled:cursor-progress ${
         paid
           ? 'border-sage-100 bg-sage-50 text-sage-600 hover:border-sage-500/40'
           : 'border-blush-200 bg-blush-50 text-wine-700 hover:border-wine-600/40'
@@ -509,6 +580,36 @@ function StatusToggle({ paid, pending, onClick }) {
         </span>
       )}
       {paid ? 'Paid' : 'Unpaid'}
+    </button>
+  );
+}
+
+function DeliveryToggle({ delivered, pending, onClick }) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      disabled={pending}
+      title={delivered ? 'Mark as undelivered' : 'Mark as delivered'}
+      aria-label={delivered ? 'Mark as undelivered' : 'Mark as delivered'}
+      className={`tap inline-flex shrink-0 items-center gap-1.5 rounded-full border py-1.5 pl-2 pr-2.5 sm:pr-3 text-[11px] font-semibold active:scale-95 disabled:cursor-progress ${
+        delivered
+          ? 'border-sky-200 bg-sky-50 text-sky-700 hover:border-sky-400/50'
+          : 'border-blush-200 bg-cream-100 text-ink-500 hover:border-blush-300 hover:text-ink-700'
+      }`}
+    >
+      {pending ? (
+        <Spinner size={12} stroke={1.75} />
+      ) : (
+        <span
+          className={`flex size-3.5 items-center justify-center rounded-full ${
+            delivered ? 'bg-sky-600 text-cream-50' : 'border border-ink-300'
+          }`}
+        >
+          {delivered && <Check className="size-2.5" strokeWidth={3.5} />}
+        </span>
+      )}
+      {delivered ? 'Delivered' : 'Undelivered'}
     </button>
   );
 }
@@ -887,7 +988,7 @@ function QrPaymentModal({ open, onClose, order, upiId, onConfigureUpi }) {
       const url = `https://wa.me/${formattedPhone}?text=${encodeURIComponent(upiUrl)}`;
       window.open(url, '_blank');
       showToast('Opening WhatsApp...', 'success');
-    } catch (err) {
+    } catch {
       showToast('Failed to open WhatsApp.', 'error');
     }
   };
@@ -901,7 +1002,7 @@ function QrPaymentModal({ open, onClose, order, upiId, onConfigureUpi }) {
       if (copied) {
         showToast('Image copied! Just paste in the WhatsApp chat.', 'success');
       }
-    } catch (err) {
+    } catch {
       showToast('Failed to copy card image.', 'error');
     } finally {
       setSharing(false);

@@ -5,6 +5,7 @@ import {
   updateOrder,
   deleteOrder,
   togglePaymentStatus,
+  toggleDeliveryStatus,
   fetchOrdersPDFBlob,
   fetchUpiIdSetting,
   updateUpiIdSetting,
@@ -299,6 +300,46 @@ export const OrderProvider = ({ children }) => {
     [rowPending, markRow, clearRow, showToast]
   );
 
+  const toggleOrderDelivery = useCallback(
+    async (id) => {
+      if (rowPending[id]) return;
+      markRow(id, 'toggle-delivery');
+
+      /* Optimistic flip — reverted if the request fails. */
+      let previous = false;
+      setOrders((prev) =>
+        prev.map((o) => {
+          if ((o._id || o.id) !== id) return o;
+          previous = Boolean(o.isDelivered);
+          return { ...o, isDelivered: !previous };
+        })
+      );
+
+      try {
+        const updated = await toggleDeliveryStatus(id, previous);
+        if (updated && updated.isDelivered !== undefined) {
+          setOrders((prev) =>
+            prev.map((o) =>
+              (o._id || o.id) === id ? { ...o, isDelivered: updated.isDelivered } : o
+            )
+          );
+          showToast(
+            updated.isDelivered ? 'Order marked as delivered.' : 'Order marked as undelivered.',
+            'success'
+          );
+        }
+      } catch (err) {
+        setOrders((prev) =>
+          prev.map((o) => ((o._id || o.id) === id ? { ...o, isDelivered: previous } : o))
+        );
+        showToast(err?.message || 'Could not update delivery status.', 'error');
+      } finally {
+        clearRow(id);
+      }
+    },
+    [rowPending, markRow, clearRow, showToast]
+  );
+
   const downloadPDF = useCallback(async () => {
     setDownloadingPdf(true);
     showToast('Preparing your PDF report...', 'info');
@@ -367,6 +408,7 @@ export const OrderProvider = ({ children }) => {
         editOrder,
         removeOrder,
         toggleOrderPayment,
+        toggleOrderDelivery,
         downloadPDF,
         upiId,
         saveUpiId,

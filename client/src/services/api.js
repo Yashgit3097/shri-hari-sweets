@@ -48,6 +48,21 @@ export const togglePaymentStatus = async (id) => {
   return res.json();
 };
 
+export const toggleDeliveryStatus = async (id, currentStatus) => {
+  try {
+    const res = await fetch(`${API_BASE}/${id}/toggle-delivery`, {
+      method: 'PATCH'
+    });
+    if (res.ok) {
+      return res.json();
+    }
+  } catch {
+    // If route is not yet deployed, fallback below
+  }
+  // Fallback to standard updateOrder endpoint
+  return updateOrder(id, { isDelivered: !currentStatus });
+};
+
 export const fetchOrdersPDFBlob = async () => {
   const res = await fetch(`${API_BASE}/download-pdf`);
   if (!res.ok) throw new Error("Failed to download PDF report");

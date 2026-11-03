@@ -19,12 +19,6 @@ const newRow = (itemName = SWEET_NAMES[0], weight = 250, qty = 1) => {
   return { key: `row-${++rowSeq}`, itemName, weight, qty, price, amount: price * qty };
 };
 
-const getOrdinal = (n) => {
-  const s = ["th", "st", "nd", "rd"],
-    v = n % 100;
-  return n + (s[(v - 20) % 10] || s[v] || s[0]);
-};
-
 const inr = (n) => `₹${Number(n || 0).toLocaleString('en-IN')}`;
 
 /**
@@ -61,6 +55,7 @@ function OrderForm({ order }) {
       : [newRow()]
   );
   const [status, setStatus] = useState(order?.status || 'unpaid');
+  const [isDelivered, setIsDelivered] = useState(Boolean(order?.isDelivered));
   const [errors, setErrors] = useState({});
   const [showSuggestions, setShowSuggestions] = useState(false);
 
@@ -171,6 +166,7 @@ function OrderForm({ order }) {
       })),
       totalPrice: grandTotal,
       status,
+      isDelivered,
     };
 
     try {
@@ -357,6 +353,45 @@ function OrderForm({ order }) {
                       className={`flex size-4 items-center justify-center rounded-full border transition-colors duration-200 ${active
                         ? isPaid
                           ? 'border-sage-500 bg-sage-500 text-cream-50'
+                          : 'border-wine-700 bg-wine-700 text-cream-50'
+                        : 'border-blush-200'
+                        }`}
+                    >
+                      {active && <Check className="size-2.5" strokeWidth={4} />}
+                    </span>
+                    {opt.label}
+                  </button>
+                );
+              })}
+            </div>
+          </Fieldset>
+
+          {/* delivery */}
+          <Fieldset title="Delivery Status">
+            <div className="grid grid-cols-2 gap-2">
+              {[
+                { val: false, label: 'Undelivered' },
+                { val: true, label: 'Delivered' },
+              ].map((opt) => {
+                const active = isDelivered === opt.val;
+                const isDone = opt.val === true;
+                return (
+                  <button
+                    key={String(opt.val)}
+                    type="button"
+                    onClick={() => setIsDelivered(opt.val)}
+                    aria-pressed={active}
+                    className={`tap flex items-center justify-center gap-2 rounded-xl border px-4 py-3 text-[13px] font-semibold active:scale-[0.98] ${active
+                      ? isDone
+                        ? 'border-sky-500 bg-sky-50 text-sky-700'
+                        : 'border-wine-700 bg-blush-50 text-wine-700'
+                      : 'border-blush-100 bg-cream-50 text-ink-400 hover:border-blush-200'
+                      }`}
+                  >
+                    <span
+                      className={`flex size-4 items-center justify-center rounded-full border transition-colors duration-200 ${active
+                        ? isDone
+                          ? 'border-sky-600 bg-sky-600 text-cream-50'
                           : 'border-wine-700 bg-wine-700 text-cream-50'
                         : 'border-blush-200'
                         }`}
